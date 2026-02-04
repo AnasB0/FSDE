@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  docker-compose-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up env file
+        run: |
+          cp ksa-logistics-saas/.env.example ksa-logistics-saas/.env
+          echo "JWT_SECRET=ci-secret" >> ksa-logistics-saas/.env
+          echo "MONGO_URI=mongodb://mongo:27017/ksa_logistics" >> ksa-logistics-saas/.env
+          echo "AI_SERVICE_URL=http://ai-service:8000" >> ksa-logistics-saas/.env
+          echo "VITE_API_URL=http://localhost:4000" >> ksa-logistics-saas/.env
+
+      - name: Build and start stack
+        run: |
+          docker compose -f ksa-logistics-saas/docker-compose.yml up -d --build
+
+      - name: Wait for services
+        run: |
+          for i in {1..20}; do
+            if curl -fsS http://localhost:4000/health && curl -fsS http://localhost:8000/health; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Services failed to become healthy" && exit 1
+
+      - name: Smoke test client
+        run: |
+          curl -fsS http://localhost:5173 > /dev/null
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          docker compose -f ksa-logistics-saas/docker-compose.yml logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose -f ksa-logistics-saas/docker-compose.yml down -v

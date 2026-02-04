@@ -1,0 +1,47 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: ksa-logistics-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  server:
+    build:
+      context: ./server
+    container_name: ksa-logistics-server
+    ports:
+      - "4000:4000"
+    environment:
+      - MONGO_URI=${MONGO_URI}
+      - JWT_SECRET=${JWT_SECRET}
+      - AI_SERVICE_URL=${AI_SERVICE_URL}
+      - SEED_DATA=${SEED_DATA}
+    depends_on:
+      - mongo
+      - ai-service
+
+  ai-service:
+    build:
+      context: ./ai-service
+    container_name: ksa-logistics-ai
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL}
+
+  client:
+    build:
+      context: ./client
+    container_name: ksa-logistics-client
+    ports:
+      - "5173:80"
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-/api}
+    depends_on:
+      - server
+
+volumes:
+  mongo_data:
